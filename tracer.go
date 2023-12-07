@@ -3,7 +3,6 @@ package telemetry
 import (
 	"context"
 
-	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
@@ -30,7 +29,7 @@ func newExporter(ctx context.Context, url string) (tracesdk.SpanExporter, error)
 		otlptracegrpc.WithEndpoint(url),
 	)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 	return traceExporter, nil
 }
@@ -60,18 +59,26 @@ func newTraceProvider(
 func Init(ctx context.Context, exporterURL string, serviceName string) (trace.Tracer, error) {
 	exporter, err := newExporter(ctx, exporterURL)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 
 	tp, err := newTraceProvider(exporter, serviceName)
 	if err != nil {
-		return nil, errors.WithStack(err)
+		return nil, err
 	}
 
 	otel.SetTracerProvider(tp) // !!!!!!!!!!!
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
 
 	tracer := tp.Tracer(serviceName)
+
+	// Start a goroutine to listen for context cancellation and shutdown the tracer provider
+	go func() {
+		<-ctx.Done()
+		if err := tp.Shutdown(ctx); err != nil && err != context.Canceled {
+			panic(err)
+		}
+	}()
 
 	return tracer, nil
 }
