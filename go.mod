@@ -1,4 +1,4 @@
-module gitlab.ml.rc.dating.com/rc-ml-team/golang-pkg/telemetry
+module github.com/ClickOcean/rc-ml-team-golang-pkg-telemetry
 
 go 1.22
 
